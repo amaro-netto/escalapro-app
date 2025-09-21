@@ -30,7 +30,6 @@ const createEmptySchedule = (): DaySchedule => {
       ligacao: [[], [], []] // 3 linhas de ligação
     };
     
-    // Inicializar as 3 linhas de ligação
     for (let i = 0; i < 3; i++) {
       schedule[day].ligacao[i] = TIME_SLOTS.map(slot => ({
         day,
@@ -51,6 +50,31 @@ export const useSchedule = () => {
   const [config, setConfig] = useState<ScheduleConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Carregar configurações do localStorage
+  const loadConfig = useCallback((): ScheduleConfig => {
+    try {
+      const savedSettings = localStorage.getItem('app-settings');
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        if (settings.escalas) {
+          return {
+            turnDuration: settings.escalas.duracaoMinimaTurno || DEFAULT_CONFIG.turnDuration,
+            lunchCoverage: settings.escalas.coberturaMinima / 100 || DEFAULT_CONFIG.lunchCoverage,
+            balanceHours: settings.escalas.alertaConflitos || DEFAULT_CONFIG.balanceHours,
+            rotateChannels: true,
+            respectLunch: true,
+            lunchType: settings.escalas.almocoTipo || 'aleatorio',
+            fixedLunchStart: settings.escalas.almocoFixoInicio || '12:00',
+            fixedLunchEnd: settings.escalas.almocoFixoFim || '13:00'
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('Erro ao carregar configurações:', error);
+    }
+    return DEFAULT_CONFIG;
+  }, []);
 
   // Carregar dados do Supabase
   const fetchData = useCallback(async () => {
@@ -89,12 +113,10 @@ export const useSchedule = () => {
     fetchData();
   }, [fetchData]);
 
-  // Salvar no Supabase quando a escala for alterada
   const saveSchedule = useCallback(async (newSchedule: DaySchedule) => {
     setSchedule(newSchedule);
     
     try {
-      // O Supabase tem um limite de linhas para a tier gratuita. Para simplificar, vamos usar uma única linha.
       const { error: upsertError } = await supabase
         .from('schedule')
         .upsert({ id: 1, data: newSchedule }, { onConflict: 'id' });
@@ -159,7 +181,6 @@ export const useSchedule = () => {
       
       setEmployees(prev => prev.filter(emp => emp.id !== id));
 
-      // Remover funcionário da escala
       const newSchedule = { ...schedule };
       Object.keys(newSchedule).forEach(day => {
         newSchedule[day].livechat.forEach(slot => {
@@ -182,15 +203,22 @@ export const useSchedule = () => {
     }
   }, [schedule, saveSchedule]);
   
-  // Funções de auto-completar, limpeza e estatísticas
-  const autoComplete = useCallback(() => {
-    // Lógica de auto-completar...
-    const activeEmployees = employees.filter(emp => emp.active);
-    if (activeEmployees.length < 4) return;
-    const newSchedule = createEmptySchedule();
-    // ... (restante da lógica de auto-completar)
-    saveSchedule(newSchedule);
-  }, [employees, saveSchedule]);
+  const autoComplete = useCallback(async () => {
+    try {
+        const { error } = await supabase.functions.invoke('auto-complete-schedule');
+        
+        if (error) {
+            console.error('Error invoking Edge Function:', error);
+            // Lidar com o erro de forma apropriada
+            return;
+        }
+
+        await fetchData();
+        
+    } catch (err) {
+        console.error('Unexpected error:', err);
+    }
+}, [fetchData]);
 
   const clearSchedule = useCallback(() => {
     const newSchedule = createEmptySchedule();
@@ -198,7 +226,6 @@ export const useSchedule = () => {
   }, [saveSchedule]);
   
   const getEmployeeStats = useCallback((employeeId: string) => {
-    // Lógica de estatísticas...
     let totalHours = 0;
     let livechatHours = 0;
     let ligacaoHours = 0;
@@ -222,7 +249,6 @@ export const useSchedule = () => {
   }, [schedule]);
 
   const hasScheduleConflict = useCallback((employeeId: string, day: string, timeSlot: string, excludeChannel?: { channel: 'livechat' | 'ligacao'; line?: number }) => {
-    // Lógica de conflitos...
     const daySchedule = schedule[day];
     if (!daySchedule) return false;
     const slotIndex = TIME_SLOTS.findIndex(slot => slot.display === timeSlot);
@@ -238,7 +264,6 @@ export const useSchedule = () => {
   }, [schedule]);
 
   const isEmployeeLunchTime = useCallback((employeeId: string, timeSlot: string): boolean => {
-    // Lógica de almoço...
     const employee = employees.find(emp => emp.id === employeeId);
     if (!employee) return false;
     if (config.lunchType === 'fixo' && config.fixedLunchStart && config.fixedLunchEnd) {
@@ -249,30 +274,6 @@ export const useSchedule = () => {
     }
     return false;
   }, [employees, config]);
-
-  const loadConfig = useCallback((): ScheduleConfig => {
-    try {
-      const savedSettings = localStorage.getItem('app-settings');
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        if (settings.escalas) {
-          return {
-            turnDuration: settings.escalas.duracaoMinimaTurno || DEFAULT_CONFIG.turnDuration,
-            lunchCoverage: settings.escalas.coberturaMinima / 100 || DEFAULT_CONFIG.lunchCoverage,
-            balanceHours: settings.escalas.alertaConflitos || DEFAULT_CONFIG.balanceHours,
-            rotateChannels: true,
-            respectLunch: true,
-            lunchType: settings.escalas.almocoTipo || 'aleatorio',
-            fixedLunchStart: settings.escalas.almocoFixoInicio || '12:00',
-            fixedLunchEnd: settings.escalas.almocoFixoFim || '13:00'
-          };
-        }
-      }
-    } catch (error) {
-      console.warn('Erro ao carregar configurações:', error);
-    }
-    return DEFAULT_CONFIG;
-  }, []);
 
   const refreshConfig = useCallback(() => {
     setConfig(loadConfig());
