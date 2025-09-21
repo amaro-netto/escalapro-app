@@ -1,14 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSchedule } from "@/hooks/useSchedule";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Eye,
-  Download,
   Share2,
   Clock,
   Coffee,
@@ -20,12 +19,15 @@ import {
 } from "lucide-react";
 import { DAYS, TIME_SLOTS } from "@/types";
 
-export function VisualizarEscalaPage() {
+const VisualizarEscalaPage = () => {
   const { employees, schedule, getEmployeeStats } = useSchedule();
-  const [selectedEmployee, setSelectedEmployee] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"all" | "employee">("all");
-
+  const { user, role } = useAuth();
+  const isManagerOrAdmin = role === 'administrador' || role === 'gerente';
+  
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  
   const activeEmployees = employees.filter(emp => emp.active);
+  const loggedInEmployee = useMemo(() => employees.find(emp => emp.id === user?.id), [employees, user]);
 
   const getSlotContent = (day: string, timeSlot: string, channel: 'livechat' | 'ligacao', lineIndex?: number) => {
     const daySchedule = schedule[day];
@@ -41,7 +43,7 @@ export function VisualizarEscalaPage() {
     return null;
   };
 
-  const getEmployeeById = (id: string) => employees.find(emp => emp.id === id);
+  const getEmployeeById = (id: string) => employees.find(emp => id === id);
 
   const getEmployeeScheduleForDay = (employeeId: string, day: string) => {
     const daySchedule = schedule[day];
@@ -49,7 +51,6 @@ export function VisualizarEscalaPage() {
 
     const employeeSlots = [];
 
-    // Verificar livechat
     daySchedule.livechat.forEach((slot: any, index: number) => {
       if (slot.employeeId === employeeId) {
         employeeSlots.push({
@@ -60,7 +61,6 @@ export function VisualizarEscalaPage() {
       }
     });
 
-    // Verificar ligação
     daySchedule.ligacao.forEach((line: any[], lineIndex: number) => {
       line.forEach((slot: any, index: number) => {
         if (slot.employeeId === employeeId) {
@@ -86,7 +86,6 @@ export function VisualizarEscalaPage() {
       const currentSlot = slots[i];
       const previousSlot = slots[i - 1];
       
-      // Verificar se são slots consecutivos do mesmo canal
       const currentIndex = TIME_SLOTS.findIndex(t => t.display === currentSlot.time);
       const previousIndex = TIME_SLOTS.findIndex(t => t.display === previousSlot.time);
       
@@ -107,13 +106,13 @@ export function VisualizarEscalaPage() {
   };
 
   const handleExportToEmail = () => {
-    const employee = getEmployeeById(selectedEmployee);
+    const employee = getEmployeeById(selectedEmployeeId);
     if (!employee) return;
 
     let emailBody = `Olá ${employee.name},\n\nSegue sua escala para a semana:\n\n`;
     
     DAYS.forEach(day => {
-      const daySlots = getEmployeeScheduleForDay(selectedEmployee, day);
+      const daySlots = getEmployeeScheduleForDay(selectedEmployeeId, day);
       const groups = groupConsecutiveSlots(daySlots);
       
       if (groups.length > 0) {
@@ -137,13 +136,11 @@ export function VisualizarEscalaPage() {
     window.open(mailtoLink);
   };
 
-  const renderEmployeeView = () => {
-    if (!selectedEmployee) return null;
-    
-    const employee = getEmployeeById(selectedEmployee);
+  const renderEmployeeView = (employeeId: string) => {
+    const employee = getEmployeeById(employeeId);
     if (!employee) return null;
 
-    const stats = getEmployeeStats(selectedEmployee);
+    const stats = getEmployeeStats(employeeId);
     
     return (
       <div className="space-y-6">
@@ -163,7 +160,7 @@ export function VisualizarEscalaPage() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 no-print">
                 <Button size="sm" onClick={handleExportToEmail}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Enviar por Email
@@ -180,11 +177,11 @@ export function VisualizarEscalaPage() {
         {/* Escala do funcionário */}
         <div className="grid gap-4">
           {DAYS.map(day => {
-            const daySlots = getEmployeeScheduleForDay(selectedEmployee, day);
+            const daySlots = getEmployeeScheduleForDay(employeeId, day);
             const groups = groupConsecutiveSlots(daySlots);
             
             return (
-              <Card key={day}>
+              <Card key={day} className="print-break">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Calendar className="h-5 w-5" />
@@ -392,7 +389,7 @@ export function VisualizarEscalaPage() {
   return (
     <div className="space-y-6">
       {/* Controles */}
-      <Card>
+      <Card className="no-print">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Eye className="h-5 w-5" />
@@ -406,21 +403,40 @@ export function VisualizarEscalaPage() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <Label htmlFor="viewMode">Modo de Visualização</Label>
-              <Select value={viewMode} onValueChange={(value: "all" | "employee") => setViewMode(value)}>
+              <Select 
+                value={selectedEmployeeId ? "employee" : "all"} 
+                onValueChange={(value) => {
+                  if (value === "all") {
+                    setSelectedEmployeeId(null);
+                  } else {
+                    setSelectedEmployeeId(loggedInEmployee?.id || null);
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Escala Completa</SelectItem>
-                  <SelectItem value="employee">Funcionário Individual</SelectItem>
+                  {loggedInEmployee && (
+                    <SelectItem value="employee">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: loggedInEmployee.color }}
+                        />
+                        Minha Escala ({loggedInEmployee.name})
+                      </div>
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
             
-            {viewMode === "employee" && (
+            {isManagerOrAdmin && selectedEmployeeId && (
               <div className="flex-1">
                 <Label htmlFor="employee">Selecionar Funcionário</Label>
-                <Select value={selectedEmployee} onValueChange={setSelectedEmployee}>
+                <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Escolha um funcionário" />
                   </SelectTrigger>
@@ -442,19 +458,25 @@ export function VisualizarEscalaPage() {
             )}
           </div>
           
-          {viewMode === "all" && (
-            <div className="flex gap-2">
-              <Button onClick={handlePrint}>
-                <Printer className="h-4 w-4 mr-2" />
-                Imprimir Escala Completa
+          <div className="flex gap-2">
+            <Button onClick={handlePrint}>
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir
+            </Button>
+            {selectedEmployeeId && (
+              <Button onClick={handleExportToEmail}>
+                <Share2 className="h-4 w-4 mr-2" />
+                Enviar por Email
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* Conteúdo */}
-      {viewMode === "all" ? renderAllEmployeesView() : renderEmployeeView()}
+      {selectedEmployeeId ? renderEmployeeView(selectedEmployeeId) : renderAllEmployeesView()}
     </div>
   );
-}
+};
+
+export default VisualizarEscalaPage;

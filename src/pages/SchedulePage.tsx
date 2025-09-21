@@ -15,7 +15,7 @@ import { EmployeeCard } from "@/components/EmployeeCard";
 import { useSchedule } from "@/hooks/useSchedule";
 import { useToast } from "@/hooks/use-toast";
 
-export function SchedulePage() {
+const SchedulePage = () => {
   const {
     employees,
     schedule,
@@ -168,3 +168,5 @@ export function SchedulePage() {
     </div>
   );
 }
+
+export default SchedulePage;

@@ -18,7 +18,7 @@ import {
   Play
 } from "lucide-react";
 
-export function AutoCompletarPage() {
+const AutoCompletarPage = () => {
   const { employees, autoComplete, clearSchedule } = useSchedule();
   const { toast } = useToast();
   
@@ -291,3 +291,5 @@ export function AutoCompletarPage() {
     </div>
   );
 }
+
+export default AutoCompletarPage;

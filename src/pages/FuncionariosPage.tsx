@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useSchedule } from "@/hooks/useSchedule";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   Plus,
   Edit,
@@ -22,10 +23,12 @@ import {
   Palette
 } from "lucide-react";
 import { Employee } from "@/types";
+import { EmployeeCard } from "@/components/EmployeeCard";
 
-export function FuncionariosPage() {
+const FuncionariosPage = () => {
   const { employees, addEmployee, updateEmployee, removeEmployee, getEmployeeStats } = useSchedule();
   const { toast } = useToast();
+  const { user, role } = useAuth();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -132,6 +135,34 @@ export function FuncionariosPage() {
     });
   };
 
+  const isManagerOrAdmin = role === 'administrador' || role === 'gerente';
+  const loggedInEmployee = employees.find(emp => emp.id === user?.id);
+
+  if (!isManagerOrAdmin && loggedInEmployee) {
+    const stats = getEmployeeStats(loggedInEmployee.id);
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Meu Perfil
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Visualização das suas informações e estatísticas semanais.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <EmployeeCard 
+              employee={loggedInEmployee} 
+              weeklyStats={stats} 
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -148,111 +179,113 @@ export function FuncionariosPage() {
               </p>
             </div>
             
-            <Dialog open={isDialogOpen} onOpenChange={(open) => {
-              setIsDialogOpen(open);
-              if (!open) resetForm();
-            }}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Adicionar Funcionário
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingId ? 'Editar Funcionário' : 'Novo Funcionário'}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Nome</Label>
-                    <Input
-                      id="name"
-                      value={formData.name || ''}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder="Digite o nome do funcionário"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="color">Cor</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {availableColors.map(color => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={`w-8 h-8 rounded-full border-2 transition-all ${
-                            formData.color === color ? 'border-foreground scale-110' : 'border-muted'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          onClick={() => setFormData({...formData, color})}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Horário de Almoço */}
-                  <div className="grid grid-cols-2 gap-4">
+            {isManagerOrAdmin && (
+              <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                setIsDialogOpen(open);
+                if (!open) resetForm();
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Adicionar Funcionário
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingId ? 'Editar Funcionário' : 'Novo Funcionário'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <Label htmlFor="lunchStart">
-                        <Coffee className="h-4 w-4 inline mr-1" />
-                        Início do Almoço
-                      </Label>
-                      <Select 
-                        value={formData.lunchStart} 
-                        onValueChange={(value) => setFormData({...formData, lunchStart: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableLunchTimes.map(time => (
-                            <SelectItem key={time} value={time}>{time}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="name">Nome</Label>
+                      <Input
+                        id="name"
+                        value={formData.name || ''}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                        placeholder="Digite o nome do funcionário"
+                        required
+                      />
                     </div>
                     
                     <div>
-                      <Label htmlFor="lunchEnd">Fim do Almoço</Label>
-                      <Select 
-                        value={formData.lunchEnd} 
-                        onValueChange={(value) => setFormData({...formData, lunchEnd: value})}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableLunchTimes.map(time => (
-                            <SelectItem key={time} value={time}>{time}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="color">Cor</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {availableColors.map(color => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={`w-8 h-8 rounded-full border-2 transition-all ${
+                              formData.color === color ? 'border-foreground scale-110' : 'border-muted'
+                            }`}
+                            style={{ backgroundColor: color }}
+                            onClick={() => setFormData({...formData, color})}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="active"
-                      checked={formData.active}
-                      onCheckedChange={(checked) => setFormData({...formData, active: checked})}
-                    />
-                    <Label htmlFor="active">Funcionário ativo</Label>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button type="submit">
-                      {editingId ? 'Salvar' : 'Adicionar'}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    {/* Horário de Almoço */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="lunchStart">
+                          <Coffee className="h-4 w-4 inline mr-1" />
+                          Início do Almoço
+                        </Label>
+                        <Select 
+                          value={formData.lunchStart} 
+                          onValueChange={(value) => setFormData({...formData, lunchStart: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableLunchTimes.map(time => (
+                              <SelectItem key={time} value={time}>{time}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="lunchEnd">Fim do Almoço</Label>
+                        <Select 
+                          value={formData.lunchEnd} 
+                          onValueChange={(value) => setFormData({...formData, lunchEnd: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableLunchTimes.map(time => (
+                              <SelectItem key={time} value={time}>{time}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="active"
+                        checked={formData.active}
+                        onCheckedChange={(checked) => setFormData({...formData, active: checked})}
+                      />
+                      <Label htmlFor="active">Funcionário ativo</Label>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2 pt-4">
+                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="submit">
+                        {editingId ? 'Salvar' : 'Adicionar'}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
         </CardHeader>
       </Card>
@@ -262,117 +295,13 @@ export function FuncionariosPage() {
         {employees.map(employee => {
           const stats = getEmployeeStats(employee.id);
           return (
-            <Card key={employee.id} className="relative hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-4 h-4 rounded-full border-2 border-white shadow-sm" 
-                      style={{ backgroundColor: employee.color }}
-                    />
-                    <div>
-                      <h3 className="font-medium">{employee.name}</h3>
-                      <Badge 
-                        variant={employee.active ? "default" : "secondary"} 
-                        className="text-xs mt-1"
-                      >
-                        {employee.active ? (
-                          <>
-                            <UserCheck className="w-3 h-3 mr-1" />
-                            Ativo
-                          </>
-                        ) : (
-                          <>
-                            <UserX className="w-3 h-3 mr-1" />
-                            Inativo
-                          </>
-                        )}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(employee)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Remover Funcionário</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tem certeza que deseja remover <strong>{employee.name}</strong>? 
-                            Esta ação removerá o funcionário de todas as escalas e não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleRemove(employee.id, employee.name)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Remover
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total de horas:</span>
-                      <Badge variant="outline">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {stats.totalHours}h
-                      </Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Livechat:</span>
-                      <span className="font-medium">{stats.livechatHours}h</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ligação:</span>
-                      <span className="font-medium">{stats.ligacaoHours}h</span>
-                    </div>
-                    
-                    <div className="text-sm text-muted-foreground">
-                      {stats.totalHours}h semanais | Livechat: {stats.livechatHours}h | Ligação: {stats.ligacaoHours}h
-                    </div>
-                    {employee.lunchStart && employee.lunchEnd && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                        <Coffee className="h-3 w-3" />
-                        Almoço: {employee.lunchStart} - {employee.lunchEnd}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="pt-2 border-t">
-                    <Button
-                      variant={employee.active ? "outline" : "default"}
-                      size="sm"
-                      onClick={() => handleToggleActive(employee.id, !employee.active)}
-                      className="w-full"
-                    >
-                      {employee.active ? 'Desativar' : 'Ativar'} Funcionário
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <EmployeeCard 
+              key={employee.id} 
+              employee={employee} 
+              onEdit={isManagerOrAdmin ? handleEdit : undefined}
+              onDelete={isManagerOrAdmin ? handleRemove : undefined}
+              weeklyStats={stats}
+            />
           );
         })}
       </div>
@@ -386,7 +315,7 @@ export function FuncionariosPage() {
               Comece adicionando funcionários à sua equipe para poder criar escalas de trabalho. 
               É necessário pelo menos 4 funcionários ativos para gerar escalas automáticas.
             </p>
-            <Button onClick={() => setIsDialogOpen(true)}>
+            <Button onClick={() => setIsDialogOpen(true)} disabled={!isManagerOrAdmin}>
               <Plus className="h-4 w-4 mr-2" />
               Adicionar Primeiro Funcionário
             </Button>
@@ -396,3 +325,5 @@ export function FuncionariosPage() {
     </div>
   );
 }
+
+export default FuncionariosPage;

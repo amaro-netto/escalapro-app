@@ -58,7 +58,7 @@ interface AppSettings {
   };
 }
 
-export function ConfiguracoesPage() {
+const ConfiguracoesPage = () => {
   const { toast } = useToast();
   
   const [settings, setSettings] = useState<AppSettings>({
@@ -483,3 +483,5 @@ export function ConfiguracoesPage() {
     </div>
   );
 }
+
+export default ConfiguracoesPage;

@@ -9,9 +9,12 @@ import {
   CalendarDays,
   Clock,
   Shuffle,
-  Eye
+  Eye,
+  UserPlus,
+  LogOut
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 import {
   Sidebar,
@@ -27,42 +30,48 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 
-const menuItems = [
+const allMenuItems = [
   { 
     title: "Escala Semanal", 
     url: "/escala", 
     icon: Calendar,
-    description: "Visualizar e editar escala"
+    description: "Visualizar e editar escala",
+    roles: ['administrador', 'gerente']
   },
   { 
     title: "Funcionários", 
     url: "/funcionarios", 
     icon: Users,
-    description: "Gerenciar agentes"
+    description: "Gerenciar agentes",
+    roles: ['administrador', 'gerente']
   },
   { 
     title: "Auto-Completar", 
     url: "/auto-completar", 
     icon: Shuffle,
-    description: "Distribuição automática"
+    description: "Distribuição automática",
+    roles: ['administrador', 'gerente']
   },
   { 
     title: "Visualizar", 
     url: "/visualizar", 
     icon: Eye,
-    description: "Ver e compartilhar escalas"
+    description: "Ver e compartilhar escalas",
+    roles: ['administrador', 'gerente', 'funcionario']
   },
   { 
     title: "Relatórios", 
     url: "/relatorios", 
     icon: BarChart3,
-    description: "Análises e estatísticas"
+    description: "Análises e estatísticas",
+    roles: ['administrador', 'gerente', 'funcionario']
   },
   { 
     title: "Configurações", 
     url: "/configuracoes", 
     icon: Settings,
-    description: "Ajustes do sistema"
+    description: "Ajustes do sistema",
+    roles: ['administrador']
   },
 ];
 
@@ -70,6 +79,9 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const location = useLocation();
   const isCollapsed = state === "collapsed";
+  const { role, signOut } = useAuth();
+  
+  const menuItems = allMenuItems.filter(item => item.roles.includes(role || ''));
 
   const isActive = (path: string) => {
     if (path === "/escala") return location.pathname === "/" || location.pathname === "/escala";
@@ -153,47 +165,66 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Status rápido */}
-        {!isCollapsed && (
+        {/* Botão de Cadastro de Usuários */}
+        {!isCollapsed && (role === 'administrador' || role === 'gerente') && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-3 pb-2">
-              Status Atual
+              Administração
             </SidebarGroupLabel>
-            <div className="px-3 space-y-2">
-              <div className="bg-accent rounded-lg p-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <Clock className="h-4 w-4 text-primary" />
-                  <span className="font-medium">Hoje</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  4 agentes ativos
-                </p>
-              </div>
-            </div>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                 <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink 
+                      to="/cadastro" 
+                      className={getNavClassName('/cadastro')}
+                    >
+                      <UserPlus className="h-4 w-4 flex-shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm">Cadastrar Usuário</span>
+                        <span className="text-xs text-muted-foreground">
+                          Novo acesso ao sistema
+                        </span>
+                      </div>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
           </SidebarGroup>
         )}
       </SidebarContent>
 
-      {/* Footer */}
-      {!isCollapsed && (
-        <div className="p-4 border-t border-border">
-          <div className="mb-4 flex justify-center">
-            <img 
-              src="https://raw.githubusercontent.com/amaro-netto/amaro-netto/refs/heads/main/logos/amaronetto%20solucoes/PNG/Tech%20Logo%20Horizontal%20Black%404x.png" 
-              alt="Logo da Empresa" 
-              className="max-w-full h-auto max-h-12 object-contain"
-            />
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-muted-foreground">
-              © 2025 Amaro Netto Soluções
-            </p>
-            <p className="text-xs text-muted-foreground">
-              EscalaPro App v1.0
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Footer com botão de Logout */}
+      <div className="p-4 border-t border-border mt-auto">
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start text-sm"
+          onClick={signOut}
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          {!isCollapsed && "Sair"}
+        </Button>
+        {!isCollapsed && (
+          <>
+            <div className="mb-4 mt-4 flex justify-center">
+              <img 
+                src="https://raw.githubusercontent.com/amaro-netto/amaro-netto/refs/heads/main/logos/amaronetto%20solucoes/PNG/Tech%20Logo%20Horizontal%20Black%404x.png" 
+                alt="Logo da Empresa" 
+                className="max-w-full h-auto max-h-12 object-contain"
+              />
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">
+                © 2025 Amaro Netto Soluções
+              </p>
+              <p className="text-xs text-muted-foreground">
+                EscalaPro App v1.0
+              </p>
+            </div>
+          </>
+        )}
+      </div>
     </Sidebar>
   );
 }
