@@ -1,0 +1,47 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.0'
+
+Deno.serve(async (req) => {
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const payload = await req.json();
+    const { record: newProfile } = payload;
+    
+    if (!newProfile) {
+        return new Response(JSON.stringify({ error: "No profile data provided." }), {
+            headers: { "Content-Type": "application/json" },
+            status: 400
+        });
+    }
+
+    const { data: newEmployee, error: employeeError } = await supabaseClient
+      .from('employees')
+      .insert({
+        id: newProfile.id,
+        name: newProfile.full_name || `Funcionário ${newProfile.id}`,
+        color: "#3B82F6", // Cor padrão, pode ser alterada depois
+        active: true,
+        lunchStart: "12:00",
+        lunchEnd: "13:00"
+      });
+
+    if (employeeError) {
+      throw employeeError;
+    }
+
+    return new Response(JSON.stringify({ success: true, newEmployee }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200
+    });
+
+  } catch (error) {
+    console.error('Erro na Edge Function:', error);
+    return new Response(JSON.stringify({ error: "Ocorreu um erro ao criar o perfil do funcionário." }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500
+    });
+  }
+});

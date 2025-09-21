@@ -1,0 +1,173 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.0'
+import { v4 as uuidv4 } from 'https://esm.sh/uuid@9.0.1';
+
+// Definição das interfaces e tipos (essencial para a função)
+interface Employee {
+  id: string;
+  name: string;
+  color: string;
+  active: boolean;
+  lunchStart: string;
+  lunchEnd: string;
+}
+
+interface ScheduleConfig {
+  turnDuration: number;
+  lunchCoverage: number;
+  balanceHours: boolean;
+  rotateChannels: boolean;
+  respectLunch: boolean;
+  lunchType: 'fixo' | 'aleatorio';
+  fixedLunchStart: string;
+  fixedLunchEnd: string;
+}
+
+interface ScheduleSlot {
+  day: string;
+  time: string;
+  employeeId: string | null;
+  channel: 'livechat' | 'ligacao';
+  channelLine?: number;
+}
+
+const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
+const WORK_HOURS = { start: 8, end: 18 };
+
+const generateTimeSlots = () => {
+  const slots = [];
+  for (let hour = WORK_HOURS.start; hour < WORK_HOURS.end; hour++) {
+    slots.push(
+      { hour, minute: 0, display: `${hour.toString().padStart(2, '0')}:00` },
+      { hour, minute: 30, display: `${hour.toString().padStart(2, '0')}:30` }
+    );
+  }
+  return slots;
+};
+const TIME_SLOTS = generateTimeSlots();
+
+const createEmptySchedule = () => {
+  const schedule: any = {};
+  DAYS.forEach(day => {
+    schedule[day] = {
+      livechat: TIME_SLOTS.map(slot => ({ day, time: slot.display, employeeId: null, channel: 'livechat' })),
+      ligacao: Array.from({ length: 3 }, (_, i) => 
+        TIME_SLOTS.map(slot => ({ day, time: slot.display, employeeId: null, channel: 'ligacao', channelLine: i }))
+      ),
+    };
+  });
+  return schedule;
+};
+
+// Algoritmo aprimorado de auto-completar
+const isEmployeeLunchTime = (employee: Employee, timeSlot: string, config: ScheduleConfig) => {
+    if (config.lunchType === 'fixo') {
+      return timeSlot >= config.fixedLunchStart && timeSlot < config.fixedLunchEnd;
+    }
+    return timeSlot >= employee.lunchStart && timeSlot < employee.lunchEnd;
+};
+
+const getAvailableEmployees = (allEmployees: Employee[], timeSlot: string, config: ScheduleConfig) => {
+  return allEmployees.filter(emp => emp.active && !isEmployeeLunchTime(emp, timeSlot, config));
+};
+
+const assignShift = (
+  schedule: any, 
+  day: string, 
+  startSlotIndex: number, 
+  endSlotIndex: number, 
+  employeeId: string, 
+  channel: 'livechat' | 'ligacao', 
+  lineIndex?: number
+) => {
+  for (let i = startSlotIndex; i <= endSlotIndex; i++) {
+    if (channel === 'livechat') {
+      schedule[day].livechat[i].employeeId = employeeId;
+    } else if (lineIndex !== undefined) {
+      schedule[day].ligacao[lineIndex][i].employeeId = employeeId;
+    }
+  }
+};
+
+Deno.serve(async (req) => {
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // 1. Buscar dados necessários
+    const { data: employees, error: employeesError } = await supabaseClient.from('employees').select('*');
+    const { data: settingsData, error: settingsError } = await supabaseClient.from('settings').select('config').single();
+
+    if (employeesError || settingsError) throw { employeesError, settingsError };
+
+    const activeEmployees = employees.filter((e: Employee) => e.active);
+    const config = settingsData?.config as ScheduleConfig || DEFAULT_CONFIG;
+    
+    if (activeEmployees.length < 4) {
+      return new Response(JSON.stringify({ error: "Mínimo de 4 funcionários ativos é necessário." }), {
+        headers: { "Content-Type": "application/json" },
+        status: 400
+      });
+    }
+
+    const newSchedule = createEmptySchedule();
+    const employeeHours: Record<string, number> = Object.fromEntries(activeEmployees.map(e => [e.id, 0]));
+
+    // Lógica de agendamento aprimorada
+    DAYS.forEach(day => {
+        // Obter uma lista de funcionários disponíveis, ordenados por menos horas trabalhadas
+        const sortedEmployees = [...activeEmployees].sort((a, b) => employeeHours[a.id] - employeeHours[b.id]);
+
+        // Preencher os turnos
+        for (let i = 0; i < TIME_SLOTS.length; i++) {
+            const timeSlot = TIME_SLOTS[i];
+            
+            // Atribuir 1 pessoa para Livechat
+            const livechatCandidates = sortedEmployees.filter(emp => {
+                const isAssigned = newSchedule[day].livechat[i].employeeId || newSchedule[day].ligacao.some(line => line[i].employeeId);
+                return !isAssigned && !isEmployeeLunchTime(emp, timeSlot.display, config);
+            });
+            if (livechatCandidates.length > 0) {
+                const employeeToAssign = livechatCandidates[0];
+                newSchedule[day].livechat[i].employeeId = employeeToAssign.id;
+                employeeHours[employeeToAssign.id] += 0.5;
+            }
+
+            // Atribuir 3 pessoas para Ligações
+            let assignedLigacaoCount = 0;
+            for (let line = 0; line < 3; line++) {
+                const ligacaoCandidates = sortedEmployees.filter(emp => {
+                    const isAssignedToAnyChannel = newSchedule[day].livechat[i].employeeId === emp.id || newSchedule[day].ligacao.some(line => line[i].employeeId === emp.id);
+                    return !isAssignedToAnyChannel && !isEmployeeLunchTime(emp, timeSlot.display, config);
+                });
+
+                if (ligacaoCandidates.length > assignedLigacaoCount) {
+                    const employeeToAssign = ligacaoCandidates[assignedLigacaoCount];
+                    newSchedule[day].ligacao[line][i].employeeId = employeeToAssign.id;
+                    employeeHours[employeeToAssign.id] += 0.5;
+                    assignedLigacaoCount++;
+                }
+            }
+        }
+    });
+
+    // 3. Salvar no banco de dados
+    const { error: upsertError } = await supabaseClient
+      .from('schedule')
+      .upsert({ id: 1, data: newSchedule }, { onConflict: 'id' });
+
+    if (upsertError) throw upsertError;
+
+    return new Response(JSON.stringify({ success: true, message: "Escala gerada com sucesso!" }), {
+      headers: { "Content-Type": "application/json" },
+      status: 200
+    });
+  } catch (error) {
+    console.error('Erro na Edge Function:', error);
+    return new Response(JSON.stringify({ error: "Ocorreu um erro ao gerar a escala." }), {
+      headers: { "Content-Type": "application/json" },
+      status: 500
+    });
+  }
+});

@@ -13,6 +13,8 @@ import { supabase } from "@/lib/supabaseClient";
 const RegisterPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState('funcionario');
   const [loading, setLoading] = useState(false);
   const { role: currentUserRole } = useAuth();
@@ -23,10 +25,25 @@ const RegisterPage = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Lógica para registrar o usuário
+    if (!fullName || !displayName) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha o nome completo e o nome de exibição.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
+      options: {
+        data: {
+          full_name: fullName,
+          display_name: displayName,
+        },
+      },
     });
     
     setLoading(false);
@@ -38,10 +55,9 @@ const RegisterPage = () => {
         variant: "destructive",
       });
     } else if (data.user) {
-      // Se o usuário foi criado, atualizar o perfil com a role
       await supabase
         .from('profiles')
-        .update({ role: role })
+        .update({ role: role, full_name: fullName, display_name: displayName })
         .eq('id', data.user.id);
 
       toast({
@@ -68,31 +84,50 @@ const RegisterPage = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="novo.usuario@empresa.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Nome Completo</Label>
+              <Input
+                id="fullName"
+                type="text"
+                placeholder="Ex: João da Silva"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Nome de Exibição</Label>
+              <Input
+                id="displayName"
+                type="text"
+                placeholder="Ex: João"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="novo.usuario@empresa.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
             
-            {/* O seletor de role só aparece para administradores */}
             {isAdministrator && (
               <div className="space-y-2">
                 <Label htmlFor="role">Nível de Acesso</Label>
