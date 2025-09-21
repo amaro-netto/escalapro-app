@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,8 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { 
+import { useSchedule } from "@/hooks/useSchedule";
+import {
   Settings,
   Clock,
   Users,
@@ -60,6 +61,7 @@ interface AppSettings {
 
 const ConfiguracoesPage = () => {
   const { toast } = useToast();
+  const { config, saveConfig, refreshConfig } = useSchedule();
   
   const [settings, setSettings] = useState<AppSettings>({
     empresa: {
@@ -109,22 +111,59 @@ const ConfiguracoesPage = () => {
     }));
     setHasChanges(true);
   };
+  
+  // Sincronizar o estado local com o estado do hook
+  useEffect(() => {
+    if (config) {
+      setSettings(prev => ({
+        ...prev,
+        escalas: {
+          ...prev.escalas,
+          duracaoMinimaTurno: config.turnDuration,
+          coberturaMinima: config.lunchCoverage * 100,
+          alertaConflitos: config.balanceHours,
+          almocoTipo: config.lunchType || 'aleatorio',
+          almocoFixoInicio: config.fixedLunchStart || '12:00',
+          almocoFixoFim: config.fixedLunchEnd || '13:00',
+        }
+      }));
+    }
+  }, [config]);
 
   const handleSave = () => {
-    localStorage.setItem('app-settings', JSON.stringify(settings));
+    // Enviar apenas as configurações de escala para o hook
+    saveConfig({
+      turnDuration: settings.escalas.duracaoMinimaTurno,
+      lunchCoverage: settings.escalas.coberturaMinima / 100,
+      balanceHours: settings.escalas.alertaConflitos,
+      rotateChannels: true, // Manter o padrão, mas pode ser configurável no futuro
+      respectLunch: true,
+      lunchType: settings.escalas.almocoTipo,
+      fixedLunchStart: settings.escalas.almocoFixoInicio,
+      fixedLunchEnd: settings.escalas.almocoFixoFim,
+    });
     setHasChanges(false);
-    
-    // Notificar outros componentes sobre mudança nas configurações
-    window.dispatchEvent(new Event('storage'));
     
     toast({
       title: "Configurações salvas!",
-      description: "Todas as alterações foram aplicadas com sucesso.",
+      description: "As alterações foram aplicadas para todos os usuários.",
     });
   };
 
   const handleReset = () => {
     // Reset para configurações padrão
+    setSettings(prev => ({
+      ...prev,
+      escalas: {
+        duracaoMinimaTurno: 2,
+        coberturaMinima: 75,
+        alertaConflitos: true,
+        autoSalvar: true,
+        almocoTipo: 'aleatorio',
+        almocoFixoInicio: '12:00',
+        almocoFixoFim: '13:00'
+      }
+    }));
     setHasChanges(true);
     toast({
       title: "Configurações resetadas",

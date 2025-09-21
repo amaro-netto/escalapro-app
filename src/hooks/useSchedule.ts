@@ -25,7 +25,7 @@ const createEmptySchedule = (): DaySchedule => {
         employeeId: null,
         channel: 'livechat' as const
       })),
-      ligacao: [[], [], []] // 3 linhas de ligação
+      ligacao: [[], [], []]
     };
     
     for (let i = 0; i < 3; i++) {
@@ -49,63 +49,55 @@ export const useSchedule = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Carregar configurações do localStorage
-  const loadConfig = useCallback((): ScheduleConfig => {
+  // Carregar configurações do Supabase
+  const loadConfig = useCallback(async (): Promise<ScheduleConfig> => {
     try {
-      const savedSettings = localStorage.getItem('app-settings');
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        if (settings.escalas) {
-          return {
-            turnDuration: settings.escalas.duracaoMinimaTurno || DEFAULT_CONFIG.turnDuration,
-            lunchCoverage: settings.escalas.coberturaMinima / 100 || DEFAULT_CONFIG.lunchCoverage,
-            balanceHours: settings.escalas.alertaConflitos || DEFAULT_CONFIG.balanceHours,
-            rotateChannels: true,
-            respectLunch: true,
-            lunchType: settings.escalas.almocoTipo || 'aleatorio',
-            fixedLunchStart: settings.escalas.almocoFixoInicio || '12:00',
-            fixedLunchEnd: settings.escalas.almocoFixoFim || '13:00'
-          };
-        }
+      const { data, error } = await supabase.from('settings').select('config').eq('id', 1).single();
+      
+      if (error && error.code !== 'PGRST116') { // Ignora "não encontrado"
+          throw error;
+      }
+      
+      if (data && data.config) {
+        return data.config as ScheduleConfig;
       }
     } catch (error) {
-      console.warn('Erro ao carregar configurações:', error);
+      console.warn('Erro ao carregar configurações do Supabase:', error);
     }
     return DEFAULT_CONFIG;
   }, []);
 
-  // Carregar dados do Supabase
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data: employeesData, error: employeesError } = await supabase
-        .from('employees')
-        .select('*');
+      const [employeesRes, scheduleRes, configRes] = await Promise.all([
+        supabase.from('employees').select('*'),
+        supabase.from('schedule').select('*'),
+        loadConfig()
+      ]);
 
-      const { data: scheduleData, error: scheduleError } = await supabase
-        .from('schedule')
-        .select('*');
+      if (employeesRes.error) throw employeesRes.error;
+      if (scheduleRes.error) throw scheduleRes.error;
 
-      if (employeesError || scheduleError) {
-        throw employeesError || scheduleError;
+      if (employeesRes.data) {
+        setEmployees(employeesRes.data);
       }
-
-      if (employeesData) {
-        setEmployees(employeesData);
-      }
-      if (scheduleData && scheduleData.length > 0) {
-        setSchedule(scheduleData[0].data);
+      if (scheduleRes.data && scheduleRes.data.length > 0) {
+        setSchedule(scheduleRes.data[0].data);
       } else {
         setSchedule(createEmptySchedule());
       }
+      
+      setConfig(configRes);
+
     } catch (err) {
       setError("Failed to fetch data from Supabase.");
       console.error("Supabase fetch error:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadConfig]);
 
   useEffect(() => {
     fetchData();
@@ -126,6 +118,20 @@ export const useSchedule = () => {
       setError("Failed to save schedule to Supabase.");
       console.error("Supabase save error:", err);
     }
+  }, []);
+
+  const saveConfig = useCallback(async (newConfig: ScheduleConfig) => {
+      setConfig(newConfig);
+      try {
+          const { error: upsertError } = await supabase
+              .from('settings')
+              .upsert({ id: 1, config: newConfig }, { onConflict: 'id' });
+  
+          if (upsertError) throw upsertError;
+      } catch (err) {
+          setError("Failed to save config to Supabase.");
+          console.error("Supabase config save error:", err);
+      }
   }, []);
 
   const addEmployee = useCallback(async (employee: Omit<Employee, 'id'>) => {
@@ -207,7 +213,6 @@ export const useSchedule = () => {
         
         if (error) {
             console.error('Error invoking Edge Function:', error);
-            // Lidar com o erro de forma apropriada
             return;
         }
 
@@ -273,17 +278,6 @@ export const useSchedule = () => {
     return false;
   }, [employees, config]);
 
-  const refreshConfig = useCallback(() => {
-    setConfig(loadConfig());
-  }, [loadConfig]);
-
-  useEffect(() => {
-    refreshConfig();
-    const handleStorageChange = () => refreshConfig();
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [refreshConfig]);
-
   return {
     employees,
     schedule,
@@ -295,7 +289,7 @@ export const useSchedule = () => {
     clearSchedule,
     getEmployeeStats,
     config,
-    setConfig,
+    saveConfig,
     hasScheduleConflict,
     isEmployeeLunchTime,
     loading,
