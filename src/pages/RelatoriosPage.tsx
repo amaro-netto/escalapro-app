@@ -202,7 +202,7 @@ const RelatoriosPage = () => {
                     <div>
                       <p className="font-semibold">{stats.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {stats.totalHours} horas | {stats.shiftCoverage}% cobertura
+                        {stats.totalHours} horas
                       </p>
                     </div>
                   </div>
@@ -241,7 +241,7 @@ const RelatoriosPage = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardContent className="flex flex-col items-center justify-center p-6">
-                <div className="flex items-center justify-center gap-2 text-primary">
+                <div className="flex items-center justify-center gap-2" style={{ color: COLORS.primary }}>
                   <Clock className="h-6 w-6" />
                   <span className="text-2xl font-bold">{loggedInEmployeeStats?.totalHours}h</span>
                 </div>
@@ -344,7 +344,7 @@ const RelatoriosPage = () => {
                     <Cell key={`cell-${entry}`} fill={chartConfigPeriodo[entry as 'manha' | 'tarde' | 'noite'].color} />
                   ))}
                   <Label
-                    value={`${loggedInEmployeeStats?.manha + loggedInEmployeeStats?.tarde + loggedInEmployeeStats?.noite}h`}
+                    value={`${loggedInEmployeeStats?.manha + loggedInEmployeeStats?.tarde + loggedInStats?.noite}h`}
                     position="center"
                     className="font-bold text-2xl"
                   />

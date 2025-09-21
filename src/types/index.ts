@@ -63,3 +63,13 @@ export const generateTimeSlots = (): TimeSlot[] => {
 };
 
 export const TIME_SLOTS = generateTimeSlots();
+
+export const COLORS = {
+  livechat: "#3B82F6",
+  ligacao: "#10B981",
+  almoco: "#F59E0B",
+  warning: "#EF4444",
+  success: "#10B981",
+  primary: "#3B82F6",
+  destructive: "#EF4444"
+};

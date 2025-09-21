@@ -1,9 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import React from "react";
-import { Employee, DaySchedule, DAYS, TIME_SLOTS, LUNCH_PERIOD, ScheduleConfig } from "@/types";
+import { Employee, DaySchedule, DAYS, TIME_SLOTS, LUNCH_PERIOD, ScheduleConfig, COLORS } from "@/types";
 import { supabase } from "@/lib/supabaseClient";
-
-const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
 
 const DEFAULT_CONFIG: ScheduleConfig = {
   turnDuration: 4,
@@ -133,7 +131,7 @@ export const useSchedule = () => {
   const addEmployee = useCallback(async (employee: Omit<Employee, 'id'>) => {
     const newEmployee: Omit<Employee, 'id'> = {
       ...employee,
-      color: employee.color || COLORS[employees.length % COLORS.length],
+      color: employee.color || COLORS.primary,
     };
     
     try {
